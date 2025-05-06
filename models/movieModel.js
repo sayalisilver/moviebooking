@@ -14,8 +14,7 @@ const movieSchema = new mongoose.Schema({
   },
   artists: [{type: mongoose.Schema.Types.ObjectId,ref: 'Artist'
   }],
-  genres: [{type: mongoose.Schema.Types.ObjectId,ref: 'Genre'
-  }],
+  genres: [{ type: String }],
   duration: {type: Number
   },
   critic_rating: {type: Number

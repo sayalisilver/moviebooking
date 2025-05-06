@@ -4,10 +4,17 @@ const uuidv4 = require('uuidv4');
 const b2a = require('b2a'); 
 const tokgen = new TokenGenerator();
 
-// ---------------- SIGN UP ----------------
+// ---------------- SIGN UP ------------
 exports.signUp = async (req, res) => {
   try {
-    const { email, first_name, last_name, contact, password } = req.body;
+    const {
+        email_address: email,
+        first_name,
+        last_name,
+        mobile_number: contact,
+        password
+      } = req.body;
+      
 
     const username = `${first_name}${last_name}`;
 
@@ -39,30 +46,40 @@ exports.signUp = async (req, res) => {
 
 // ---------------- LOGIN ----------------
 exports.login = async (req, res) => {
-  try {
-    const { username, password } = req.body;
-
- 
-    const user = await User.findOne({ username, password });
-
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    try {
+      const authHeader = req.headers.authorization;
+  
+      if (!authHeader || !authHeader.startsWith("Basic ")) {
+        return res.status(401).json({ message: "Missing or invalid authorization header" });
+      }
+  
+      const base64Credentials = authHeader.split(" ")[1];
+      const credentials = Buffer.from(base64Credentials, "base64").toString("ascii");
+      const [username, password] = credentials.split(":");
+  
+      const user = await User.findOne({ username, password });
+  
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+  
+      user.isLoggedIn = true;
+      user.accesstoken = tokgen.generate();
+      await user.save();
+  
+      res
+        .status(200)
+        .header("access-token", user.accesstoken)
+        .json({
+          message: "Login successful",
+          id: user.uuid,
+          accesstoken: user.accesstoken
+        });
+    } catch (err) {
+      res.status(500).json({ message: "Login failed", error: err.message });
     }
-
-    user.isLoggedIn = true;
-    user.accesstoken = tokgen.generate();
-    await user.save();
-
-    res.status(200).json({
-      message: 'Login successful',
-      userid: user.userid,
-      uuid: user.uuid,
-      accesstoken: user.accesstoken
-    });
-  } catch (err) {
-    res.status(500).json({ message: 'Login failed', error: err.message });
-  }
-};
+  };
+  
 
 // ---------------- LOGOUT ----------------
 exports.logout = async (req, res) => {
@@ -83,7 +100,7 @@ exports.logout = async (req, res) => {
     res.status(500).json({ message: 'Logout failed', error: err.message });
   }
 };
-//----GET COUPON
+//------------------ GET COUPON ------
 
 exports.getCouponCode = async (req, res) => {
     try {
@@ -101,27 +118,27 @@ exports.getCouponCode = async (req, res) => {
     }
   };
   
-  // ---------------- BOOK SHOW ----------------
+  //--book show
+
   exports.bookShow = async (req, res) => {
     try {
-      const { uuid, booking } = req.body;
+      const { customerUuid, bookingRequest } = req.body;
   
-      const user = await User.findOne({ uuid });
+      const user = await User.findOne({ uuid: customerUuid }); // find by uuid
   
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
   
-      user.bookingRequests.push(booking);
+      user.bookingRequests.push(bookingRequest);
 
-  
-// adding coupens when user books with coupon code
-      const couponExists = user.coupens.some(c => c.id === booking.coupon_code);
-
-      if (!couponExists) {
+      // adding coupons 
+      const couponExists = user.coupens.some(c => c.id === bookingRequest.coupon_code);
+      
+      if (!couponExists && bookingRequest.coupon_code) {
         user.coupens.push({
-          id: booking.coupon_code,
-          discountValue: booking.coupon_code 
+          id: bookingRequest.coupon_code,
+          discountValue: bookingRequest.coupon_code 
         });
       }
   
@@ -129,10 +146,11 @@ exports.getCouponCode = async (req, res) => {
   
       res.status(201).json({
         message: 'Booking successful',
-        reference_number: booking.reference_number
+        reference_number: bookingRequest.reference_number || null
       });
     } catch (err) {
       res.status(500).json({ message: 'Booking failed', error: err.message });
     }
   };
+
   
